@@ -2,11 +2,15 @@ package mapreduce
 
 import (
 	"hash/fnv"
+	"io/ioutil"
+	"log"
+	"os"
+	"encoding/json"
 )
 
 func doMap(
 	jobName string, // the name of the MapReduce job
-	mapTask int, // which map task this is
+	mapTask int,    // which map task this is
 	inFile string,
 	nReduce int, // the number of reduce task that will be run ("R" in the paper)
 	mapF func(filename string, contents string) []KeyValue,
@@ -53,6 +57,39 @@ func doMap(
 	//
 	// Your code here (Part I).
 	//
+	content, err := ioutil.ReadFile(inFile)
+	if err != nil {
+		log.Printf("Read input file %s failed", inFile)
+	}
+	kvs := mapF(inFile, string(content))
+
+	files := make([]*os.File, nReduce)
+	encs := make([]*json.Encoder, nReduce)
+
+	for i := 0; i < nReduce; i++ {
+		f, err := os.Create(reduceName(jobName, mapTask, i))
+		if err != nil {
+			log.Printf("Create intermediate file %s failed", reduceName(jobName, mapTask, i))
+		} else {
+			files[i] = f
+			encs[i] = json.NewEncoder(f)
+		}
+	}
+
+	for _, kv := range kvs {
+		r := ihash(kv.Key) % nReduce
+		err := encs[r].Encode(&kv)
+		if err != nil {
+			log.Printf("Encode key/value pair %v failed", kv)
+		}
+	}
+
+	for i := 0; i < nReduce; i++ {
+		err := files[i].Close()
+		if err != nil {
+			log.Printf("Close intermediate file %s failed", reduceName(jobName, mapTask, i))
+		}
+	}
 }
 
 func ihash(s string) int {
