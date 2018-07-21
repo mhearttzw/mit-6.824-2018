@@ -57,11 +57,11 @@ func doMap(
 	//
 	// Your code here (Part I).
 	//
-	content, err := ioutil.ReadFile(inFile)
+	contents, err := ioutil.ReadFile(inFile)
 	if err != nil {
 		log.Printf("Read input file %s failed", inFile)
 	}
-	kvs := mapF(inFile, string(content))
+	kvs := mapF(inFile, string(contents))
 
 	files := make([]*os.File, nReduce)
 	encoders := make([]*json.Encoder, nReduce)
