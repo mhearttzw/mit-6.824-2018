@@ -64,21 +64,21 @@ func doMap(
 	kvs := mapF(inFile, string(content))
 
 	files := make([]*os.File, nReduce)
-	encs := make([]*json.Encoder, nReduce)
+	encoders := make([]*json.Encoder, nReduce)
 
 	for i := 0; i < nReduce; i++ {
-		f, err := os.Create(reduceName(jobName, mapTask, i))
+		file, err := os.Create(reduceName(jobName, mapTask, i))
 		if err != nil {
 			log.Printf("Create intermediate file %s failed", reduceName(jobName, mapTask, i))
 		} else {
-			files[i] = f
-			encs[i] = json.NewEncoder(f)
+			files[i] = file
+			encoders[i] = json.NewEncoder(file)
 		}
 	}
 
 	for _, kv := range kvs {
 		r := ihash(kv.Key) % nReduce
-		err := encs[r].Encode(&kv)
+		err := encoders[r].Encode(&kv)
 		if err != nil {
 			log.Printf("Encode key/value pair %v failed", kv)
 		}
