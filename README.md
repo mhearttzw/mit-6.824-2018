@@ -1,7 +1,7 @@
 # MIT-6.824-2018
 Labs of MIT 6.824 Distributed System (Spring 2018)
 
-- [x] Lab 1: MapReduce
+- [ ] Lab 1: MapReduce
 
     - [x] Part I: Map/Reduce input and output
     
