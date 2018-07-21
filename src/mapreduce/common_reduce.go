@@ -54,6 +54,7 @@ func doReduce(
 	keys := make([]string, 0)
 	kvs := make(map[string][]string)
 
+	// Read all intermediate file and store a slice of all the values for each key in kvs
 	for i := 0; i < nMap; i++ {
 		file, err := os.Open(reduceName(jobName, i, reduceTask))
 		if err != nil {
@@ -67,13 +68,15 @@ func doReduce(
 			kvs[kv.Key] = append(kvs[kv.Key], kv.Value)
 			err = decoder.Decode(&kv)
 		}
-
-		for k := range kvs {
-			keys = append(keys, k)
-		}
 	}
 
+	// Get a sorted slice of keys
+	for k := range kvs {
+		keys = append(keys, k)
+	}
 	sort.Strings(keys)
+
+	// Encode reduce results to output file
 	file, err := os.Create(outFile)
 	if err != nil {
 		log.Printf("Create output file %s failed", outFile)

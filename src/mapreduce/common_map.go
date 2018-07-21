@@ -66,6 +66,7 @@ func doMap(
 	files := make([]*os.File, nReduce)
 	encoders := make([]*json.Encoder, nReduce)
 
+	// Initialize all intermediate files and json encoders
 	for i := 0; i < nReduce; i++ {
 		file, err := os.Create(reduceName(jobName, mapTask, i))
 		if err != nil {
@@ -76,6 +77,7 @@ func doMap(
 		}
 	}
 
+	// Encode each key/value pair to its corresponding intermediate file
 	for _, kv := range kvs {
 		r := ihash(kv.Key) % nReduce
 		err := encoders[r].Encode(&kv)
@@ -84,6 +86,7 @@ func doMap(
 		}
 	}
 
+	// Close all intermediate files
 	for i := 0; i < nReduce; i++ {
 		err := files[i].Close()
 		if err != nil {
