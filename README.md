@@ -1,7 +1,7 @@
 # MIT-6.824-2018
 My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
 
-- [ ] Lab 1: MapReduce
+- [x] Lab 1: MapReduce
 
     - [x] Part I: Map/Reduce input and output
     
@@ -11,7 +11,7 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
     
     - [x] Part IV: Handling worker failures
     
-    - [ ] Part V: Inverted index generation
+    - [x] Part V: Inverted index generation
 
 - [ ] Lab 2: Raft
 
