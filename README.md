@@ -7,9 +7,9 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
     
     - [x] Part II: Single-worker word count
     
-    - [ ] Part III: Distributing MapReduce tasks
+    - [x] Part III: Distributing MapReduce tasks
     
-    - [ ] Part IV: Handling worker failures
+    - [x] Part IV: Handling worker failures
     
     - [ ] Part V: Inverted index generation
 
