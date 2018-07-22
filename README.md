@@ -5,7 +5,7 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
 
     - [x] Part I: Map/Reduce input and output
     
-    - [ ] Part II: Single-worker word count
+    - [x] Part II: Single-worker word count
     
     - [ ] Part III: Distributing MapReduce tasks
     
