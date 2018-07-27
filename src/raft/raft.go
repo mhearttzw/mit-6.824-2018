@@ -42,6 +42,12 @@ type ApplyMsg struct {
 	CommandIndex int
 }
 
+// Log Entry
+type LogEntry struct {
+	Term int
+	Command interface{}
+}
+
 //
 // A Go object implementing a single Raft peer.
 //
@@ -55,6 +61,18 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
+	// Persistent state on all servers
+	currentTerm int
+	votedFor int
+	log []LogEntry
+
+	// Volatile state on all servers
+	commitIndex int
+	lastApplied int
+
+	// Volatile states on leaders
+	nextIndex []int
+	matchIndex []int
 }
 
 // return currentTerm and whether this server
