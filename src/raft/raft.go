@@ -97,6 +97,10 @@ func (rf *Raft) GetState() (int, bool) {
 	var term int
 	var isleader bool
 	// Your code here (2A).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	term = rf.currentTerm
+	isleader = rf.state == Leader
 	return term, isleader
 }
 
@@ -269,7 +273,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
-	go rf.launchElection()
+	go rf.launchElections()
 
 	return rf
 }
@@ -277,8 +281,12 @@ func Make(peers []*labrpc.ClientEnd, me int,
 //
 // launch election on server initialization
 //
-func (rf *Raft) launchElection() {
+func (rf *Raft) launchElections() {
 	for {
+		if _, isLeader := rf.GetState(); isLeader {
+			// Only non-Leader can launch elections
+			return
+		}
 		time.Sleep(rf.electionTimeout)
 		if rf.shouldElect {
 			DPrintf("[%d-%d-%d]: election timeout\n", rf.me, rf.state, rf.currentTerm)
@@ -299,7 +307,8 @@ func (rf *Raft) requestVotes() {
 	rf.mu.Unlock()
 
 	numVotes := 1
-	for i := 0; i < len(rf.peers); i++ {
+	numPeers := len(rf.peers)
+	for i := 0; i < numPeers; i++ {
 		if i != rf.me {
 			go func(n int) {
 				var requestVoteReply RequestVoteReply
@@ -307,20 +316,45 @@ func (rf *Raft) requestVotes() {
 					// Handle RequestVote RPC reply
 					rf.mu.Lock()
 					if requestVoteReply.Term > requestVoteArgs.Term {
+						// Candidate has stale term, turns to Follower
 						rf.currentTerm = requestVoteReply.Term
 						rf.votedFor = -1
 						rf.state = Follower
 						rf.shouldElect = false
 					} else if requestVoteReply.VoteGranted {
 						numVotes++
-						if numVotes > len(rf.peers)/2 {
+						if numVotes > numPeers/2 {
+							// Candidate is elected as Leader
 							rf.state = Leader
-							
+							for j := 0; j < numPeers; j++ {
+								rf.nextIndex[i] = len(rf.log)
+								if j == rf.me {
+									rf.matchIndex[i] = len(rf.log) - 1
+								} else {
+									rf.matchIndex[i] = 0
+								}
+							}
+							go rf.sendHeartbeats()
+							DPrintf("[%d-%d-%d]: new leader\n", rf.me, rf.state, rf.currentTerm)
 						}
 					}
 					rf.mu.Unlock()
 				}
 			}(i)
 		}
+	}
+}
+
+//
+// send heartbeats to all other servers
+//
+func (rf *Raft) sendHeartbeats()  {
+	for {
+		if _, isLeader := rf.GetState(); !isLeader {
+			// Only Leader can send heartbeats
+			return
+		}
+
+		time.Sleep(rf.heartbeatInterval)
 	}
 }
