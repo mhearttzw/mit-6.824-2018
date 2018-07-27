@@ -297,4 +297,16 @@ func (rf *Raft) requestVotes() {
 	rf.votedFor = rf.me
 	requestVoteArgs := RequestVoteArgs{Term: rf.currentTerm, CandidateId: rf.me, LastLogIndex: len(rf.log) - 1, LastLogTerm: rf.log[len(rf.log)-1].Term}
 	rf.mu.Unlock()
+
+	for i := 0; i < len(rf.peers); i++ {
+		if i != rf.me {
+			go func(n int) {
+				var requestVoteReply RequestVoteReply
+				if rf.sendRequestVote(i, &requestVoteArgs, &requestVoteReply) {
+					// Handle RequestVote RPC reply
+					
+				}
+			}(i)
+		}
+	}
 }
