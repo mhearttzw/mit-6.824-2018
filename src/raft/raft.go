@@ -18,7 +18,11 @@ package raft
 //
 
 import "sync"
-import "labrpc"
+import (
+	"labrpc"
+	"time"
+	"math/rand"
+	)
 
 // import "bytes"
 // import "labgob"
@@ -80,7 +84,10 @@ type Raft struct {
 	matchIndex []int
 
 	// Others
-	state int // Leader, Follower or Candidate
+	state             int           // Leader, Follower or Candidate
+	electionTimeout   time.Duration // 500~1000 ms
+	shouldElect       bool          // If true, server should launch election
+	heartbeatInterval time.Duration // 200 ms
 }
 
 // return currentTerm and whether this server
@@ -253,9 +260,38 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.log[0] = LogEntry{0, nil}
 	rf.commitIndex = 0
 	rf.lastApplied = 0
+	rf.nextIndex = make([]int, len(peers))
+	rf.matchIndex = make([]int, len(peers))
 	rf.state = Follower
+	rf.electionTimeout = time.Millisecond * time.Duration(500+rand.Intn(500))
+	rf.shouldElect = true
+	rf.heartbeatInterval = time.Millisecond * 200
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
+	go rf.launchElection()
+
 	return rf
+}
+
+//
+// launch election on server initialization
+//
+func (rf *Raft) launchElection() {
+	for {
+		time.Sleep(rf.electionTimeout)
+		if rf.shouldElect {
+			DPrintf("[%d-%d-%d]: election timeout\n", rf.me, rf.state, rf.currentTerm)
+			go rf.requestVotes()
+		}
+	}
+}
+
+//
+// request votes from all other servers when launching election
+//
+func (rf *Raft) requestVotes() {
+	rf.state = Candidate
+	rf.currentTerm += 1
+	rf.votedFor = rf.me
 }
