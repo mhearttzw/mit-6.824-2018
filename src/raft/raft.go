@@ -48,6 +48,13 @@ type LogEntry struct {
 	Command interface{}
 }
 
+// States
+const (
+	Leader = iota
+	Follower
+	Candidate
+)
+
 //
 // A Go object implementing a single Raft peer.
 //
@@ -73,6 +80,9 @@ type Raft struct {
 	// Volatile states on leaders
 	nextIndex []int
 	matchIndex []int
+
+	// Others
+	state int // Leader, Follower or Candidate
 }
 
 // return currentTerm and whether this server
@@ -246,7 +256,12 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
-
+	rf.currentTerm = 0
+	rf.votedFor = -1
+	rf.log = make([]LogEntry, 1)
+	rf.commitIndex = 0
+	rf.lastApplied = 0
+	rf.state = Follower
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
