@@ -298,13 +298,27 @@ func (rf *Raft) requestVotes() {
 	requestVoteArgs := RequestVoteArgs{Term: rf.currentTerm, CandidateId: rf.me, LastLogIndex: len(rf.log) - 1, LastLogTerm: rf.log[len(rf.log)-1].Term}
 	rf.mu.Unlock()
 
+	numVotes := 1
 	for i := 0; i < len(rf.peers); i++ {
 		if i != rf.me {
 			go func(n int) {
 				var requestVoteReply RequestVoteReply
 				if rf.sendRequestVote(i, &requestVoteArgs, &requestVoteReply) {
 					// Handle RequestVote RPC reply
-					
+					rf.mu.Lock()
+					if requestVoteReply.Term > requestVoteArgs.Term {
+						rf.currentTerm = requestVoteReply.Term
+						rf.votedFor = -1
+						rf.state = Follower
+						rf.shouldElect = false
+					} else if requestVoteReply.VoteGranted {
+						numVotes++
+						if numVotes > len(rf.peers)/2 {
+							rf.state = Leader
+							
+						}
+					}
+					rf.mu.Unlock()
 				}
 			}(i)
 		}
