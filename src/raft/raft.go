@@ -22,7 +22,7 @@ import (
 	"labrpc"
 	"time"
 	"math/rand"
-	)
+)
 
 // import "bytes"
 // import "labgob"
@@ -291,7 +291,10 @@ func (rf *Raft) launchElection() {
 // request votes from all other servers when launching election
 //
 func (rf *Raft) requestVotes() {
+	rf.mu.Lock()
 	rf.state = Candidate
 	rf.currentTerm += 1
 	rf.votedFor = rf.me
+	requestVoteArgs := RequestVoteArgs{Term: rf.currentTerm, CandidateId: rf.me, LastLogIndex: len(rf.log) - 1, LastLogTerm: rf.log[len(rf.log)-1].Term}
+	rf.mu.Unlock()
 }
