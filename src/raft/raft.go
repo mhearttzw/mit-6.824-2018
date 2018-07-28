@@ -237,11 +237,11 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 // arguments of AppendEntries RPC.
 //
 type AppendEntriesArgs struct {
-	Term int
-	LeaderId int
+	Term         int
+	LeaderId     int
 	PrevLogIndex int
-	PrevLogTerm int
-	Entries []LogEntry
+	PrevLogTerm  int
+	Entries      []LogEntry
 	LeaderCommit int
 }
 
@@ -249,8 +249,8 @@ type AppendEntriesArgs struct {
 // reply of AppendEntries RPC.
 //
 type AppendEntriesReply struct {
-	Term int
-	Success int
+	Term    int
+	Success bool
 }
 
 //
@@ -410,7 +410,6 @@ func (rf *Raft) requestVotes() {
 							}
 						}
 					}
-					DPrintf("[%d-%d-%d]: new leader after election\n", rf.me, rf.state, rf.currentTerm)
 					rf.mu.Unlock()
 				}
 			}(i)
@@ -427,11 +426,20 @@ func (rf *Raft) sendHeartbeats() {
 			// Only Leader can send heartbeats
 			return
 		}
-		args :=
 		for i := 0; i < len(rf.peers); i++ {
 			if i != rf.me {
 				go func(i int) {
+					args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, Entries: nil, LeaderCommit: rf.commitIndex}
+					var reply AppendEntriesReply
+					if rf.sendAppendEntries(i, &args, &reply) {
+						// Handle AppendEntries RPC reply
+						rf.mu.Lock()
+						if rf.state == Leader {
+							if reply.Success {
 
+							}
+						}
+					}
 				}(i)
 			}
 		}
