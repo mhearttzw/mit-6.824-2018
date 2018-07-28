@@ -182,6 +182,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			rf.currentTerm = args.Term
 			rf.votedFor = -1
 			rf.state = Follower
+			DPrintf("[%d-%d-%d]: turn to Follower when handling RequestVote\n", rf.me, rf.state, rf.currentTerm)
 		}
 
 		if rf.votedFor == -1 {
@@ -229,6 +230,41 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 //
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	return ok
+}
+
+//
+// arguments of AppendEntries RPC.
+//
+type AppendEntriesArgs struct {
+	Term int
+	LeaderId int
+	PrevLogIndex int
+	PrevLogTerm int
+	Entries []LogEntry
+	LeaderCommit int
+}
+
+//
+// reply of AppendEntries RPC.
+//
+type AppendEntriesReply struct {
+	Term int
+	Success int
+}
+
+//
+// AppendEntries RPC handler.
+//
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+
+}
+
+//
+// send a AppendEntries RPC to a server.
+//
+func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
+	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
 
@@ -312,12 +348,15 @@ func (rf *Raft) launchElections() {
 	for {
 		if _, isLeader := rf.GetState(); isLeader {
 			// Only non-Leader can launch elections
+			DPrintf("[%d-%d-%d]: stop launching election\n", rf.me, rf.state, rf.currentTerm)
 			return
 		}
 		time.Sleep(rf.electionTimeout)
 		if rf.shouldElect {
 			DPrintf("[%d-%d-%d]: election timeout\n", rf.me, rf.state, rf.currentTerm)
 			go rf.requestVotes()
+		} else {
+			rf.shouldElect = true
 		}
 	}
 }
@@ -330,6 +369,7 @@ func (rf *Raft) requestVotes() {
 	rf.state = Candidate
 	rf.currentTerm += 1
 	rf.votedFor = rf.me
+	DPrintf("[%d-%d-%d]: turn to Candidate\n", rf.me, rf.state, rf.currentTerm)
 	args := RequestVoteArgs{Term: rf.currentTerm, CandidateId: rf.me, LastLogIndex: len(rf.log) - 1, LastLogTerm: rf.log[len(rf.log)-1].Term}
 	rf.mu.Unlock()
 
@@ -350,6 +390,7 @@ func (rf *Raft) requestVotes() {
 							rf.votedFor = -1
 							rf.state = Follower
 							rf.shouldElect = false
+							DPrintf("[%d-%d-%d]: from Candidate to Follower\n", rf.me, rf.state, rf.currentTerm)
 						} else if reply.VoteGranted {
 							numVotes++
 							if numVotes > numPeers/2 {
@@ -369,6 +410,7 @@ func (rf *Raft) requestVotes() {
 							}
 						}
 					}
+					DPrintf("[%d-%d-%d]: new leader after election\n", rf.me, rf.state, rf.currentTerm)
 					rf.mu.Unlock()
 				}
 			}(i)
@@ -385,6 +427,7 @@ func (rf *Raft) sendHeartbeats() {
 			// Only Leader can send heartbeats
 			return
 		}
+		args :=
 		for i := 0; i < len(rf.peers); i++ {
 			if i != rf.me {
 				go func(i int) {
