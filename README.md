@@ -15,7 +15,7 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
 
 - [ ] Lab 2: Raft
 
-    - [ ] Part 2A
+    - [x] Part 2A
     
     - [ ] Part 2B
     
