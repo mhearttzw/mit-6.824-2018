@@ -257,7 +257,21 @@ type AppendEntriesReply struct {
 // AppendEntries RPC handler.
 //
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
-
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if args.Term < rf.currentTerm {
+		reply.Term = rf.currentTerm
+		reply.Success = false
+		return
+	}
+	if args.Term > rf.currentTerm {
+		rf.currentTerm = args.Term
+	}
+	if rf.state == Leader {
+		rf.state = Follower
+		rf.votedFor = -1
+		go rf.launchElections()
+	}
 }
 
 //
@@ -398,11 +412,11 @@ func (rf *Raft) requestVotes() {
 								rf.state = Leader
 								rf.shouldElect = false
 								for j := 0; j < numPeers; j++ {
-									rf.nextIndex[i] = len(rf.log)
+									rf.nextIndex[j] = len(rf.log)
 									if j == rf.me {
-										rf.matchIndex[i] = len(rf.log) - 1
+										rf.matchIndex[j] = len(rf.log) - 1
 									} else {
-										rf.matchIndex[i] = 0
+										rf.matchIndex[j] = 0
 									}
 								}
 								go rf.sendHeartbeats()
@@ -429,16 +443,18 @@ func (rf *Raft) sendHeartbeats() {
 		for i := 0; i < len(rf.peers); i++ {
 			if i != rf.me {
 				go func(i int) {
+					DPrintf("[%d-%d-%d]: send heartbeat to %d\n", rf.me, rf.state, rf.currentTerm, i)
 					args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, Entries: nil, LeaderCommit: rf.commitIndex}
 					var reply AppendEntriesReply
 					if rf.sendAppendEntries(i, &args, &reply) {
 						// Handle AppendEntries RPC reply
 						rf.mu.Lock()
-						if rf.state == Leader {
-							if reply.Success {
-
-							}
+						if rf.state == Leader && reply.Term > rf.currentTerm {
+							rf.state = Follower
+							rf.votedFor = -1
+							go rf.launchElections()
 						}
+						rf.mu.Unlock()
 					}
 				}(i)
 			}
