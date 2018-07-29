@@ -173,10 +173,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	DPrintf("[%d-%d-%d]: receive RequestVote from %d\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
+	reply.Term = rf.currentTerm
 	if args.Term < rf.currentTerm {
-		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
-		DPrintf("[%d-%d-%d]: reject RequestVote from %d\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
+		DPrintf("[%d-%d-%d]: reject RequestVote from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 		return
 	} else {
 		if args.Term > rf.currentTerm {
@@ -189,13 +189,15 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		if rf.votedFor == -1 {
 			lastLogIndex := len(rf.log) - 1
 			lastLogTerm := rf.log[lastLogIndex].Term
-			DPrintf("[%d-%d-%d]: check vote condition from %d\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 			if args.LastLogTerm > lastLogTerm || (args.LastLogTerm == lastLogTerm && args.LastLogIndex >= lastLogIndex) {
 				rf.votedFor = args.CandidateId
 				rf.state = Follower
 				rf.electionTimer.Reset(rf.electionTimeout)
 				reply.VoteGranted = true
 				DPrintf("[%d-%d-%d]: accept RequestVote from %d\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
+			} else {
+				reply.VoteGranted = false
+				DPrintf("[%d-%d-%d]: reject RequestVote from %d because of more up-to-date log\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 			}
 		}
 	}
