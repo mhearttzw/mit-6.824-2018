@@ -22,6 +22,7 @@ import (
 	"labrpc"
 	"time"
 	"math/rand"
+	"sort"
 )
 
 // import "bytes"
@@ -523,13 +524,18 @@ func (rf *Raft) sendLogs() {
 						if rf.sendAppendEntries(i, &args, &reply) {
 							// Handle AppendEntries RPC reply
 							DPrintf("[%d-%d-%d]: handle AppendEntries reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
-							if rf.state == Leader && reply.Term > rf.currentTerm {
+							if reply.Success {
+								rf.matchIndex[i] = len(rf.log) - 1
+								rf.nextIndex[i] = rf.matchIndex[i] + 1
+								rf.updateCommitIndex()
+							} else if rf.state == Leader && reply.Term > rf.currentTerm {
 								rf.state = Follower
 								rf.votedFor = -1
 								rf.electionTimer = time.NewTimer(rf.electionTimeout)
 								go rf.launchElections()
+							} else {
+								
 							}
-
 						}
 					}
 				}(i)
@@ -537,6 +543,21 @@ func (rf *Raft) sendLogs() {
 		}
 		rf.logTimer.Reset(rf.logInterval)
 		<-rf.logTimer.C
+	}
+}
+
+//
+// try to update Leader's commitIndex
+//
+func (rf *Raft) updateCommitIndex() {
+	matchIndex := make([]int, len(rf.matchIndex))
+	copy(matchIndex, rf.matchIndex)
+	sort.Ints(matchIndex)
+	N := matchIndex[(len(rf.peers)-1)/2]
+	if N > rf.commitIndex && rf.log[N].Term == rf.currentTerm {
+		DPrintf("[%d-%d-%d]: update commitIndex from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.commitIndex, N)
+		rf.commitIndex = N
+		rf.commitCond.Broadcast()
 	}
 }
 
@@ -554,6 +575,8 @@ func (rf *Raft) sendApplyMsgs() {
 				rf.applyCh <- ApplyMsg{true, rf.log[i].Command, i}
 			}
 		}
+		DPrintf("[%d-%d-%d]: apply messages from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.lastApplied+1, rf.commitIndex)
+		rf.lastApplied = rf.commitIndex
 		rf.mu.Unlock()
 	}
 }
