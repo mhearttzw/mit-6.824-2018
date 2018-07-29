@@ -506,7 +506,7 @@ func (rf *Raft) sendHeartbeats() {
 func (rf *Raft) sendLogs() {
 	for {
 		if _, isLeader := rf.GetState(); !isLeader {
-			// Only Leader can send heartbeats
+			// Only Leader can send logs
 			rf.logTimer.Stop()
 			return
 		}
@@ -529,13 +529,13 @@ func (rf *Raft) sendLogs() {
 								rf.electionTimer = time.NewTimer(rf.electionTimeout)
 								go rf.launchElections()
 							}
-							
+
 						}
 					}
 				}(i)
 			}
 		}
-		rf.heartbeatTimer.Reset(rf.logInterval)
+		rf.logTimer.Reset(rf.logInterval)
 		<-rf.logTimer.C
 	}
 }
