@@ -178,8 +178,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	DPrintf("[%d-%d-%d]: receive RequestVote from %d\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
-	reply.Term = rf.currentTerm
 	if args.Term < rf.currentTerm {
+		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		DPrintf("[%d-%d-%d]: reject RequestVote from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 	} else {
@@ -189,6 +189,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			rf.state = Follower
 			DPrintf("[%d-%d-%d]: turn to Follower when handling RequestVote\n", rf.me, rf.state, rf.currentTerm)
 		}
+		reply.Term = rf.currentTerm
 
 		if rf.votedFor == -1 {
 			lastLogIndex := len(rf.log) - 1
