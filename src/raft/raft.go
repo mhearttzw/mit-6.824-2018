@@ -89,6 +89,8 @@ type Raft struct {
 	electionTimer     *time.Timer
 	heartbeatInterval time.Duration // 200 ms
 	heartbeatTimer    *time.Timer
+	applyCh           chan ApplyMsg
+	commitCond        *sync.Cond // for commitIndex update
 }
 
 // return currentTerm and whether this server
@@ -369,10 +371,13 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimer = time.NewTimer(rf.electionTimeout)
 	rf.heartbeatInterval = time.Millisecond * 200
 	rf.heartbeatTimer = time.NewTimer(rf.heartbeatInterval)
+	rf.applyCh = applyCh
+	rf.commitCond = sync.NewCond(&rf.mu)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
 	go rf.launchElections()
+	go rf.sendApplyMsgs()
 
 	return rf
 }
@@ -486,5 +491,23 @@ func (rf *Raft) sendHeartbeats() {
 		}
 		rf.heartbeatTimer.Reset(rf.heartbeatInterval)
 		<-rf.heartbeatTimer.C
+	}
+}
+
+//
+// send apply messages to tester or service
+//
+func (rf *Raft) sendApplyMsgs() {
+	for {
+		rf.mu.Lock()
+		for rf.lastApplied == rf.commitIndex {
+			rf.commitCond.Wait()
+		}
+		if rf.lastApplied < rf.commitIndex {
+			for i := rf.lastApplied + 1; i <= rf.commitIndex; i++ {
+				rf.applyCh <- ApplyMsg{true, rf.log[i].Command, i}
+			}
+		}
+		rf.mu.Unlock()
 	}
 }
