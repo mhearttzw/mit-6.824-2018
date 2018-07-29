@@ -407,7 +407,6 @@ func (rf *Raft) requestVotes() {
 					if rf.state == Candidate {
 						if reply.Term > args.Term {
 							// Candidate has stale term, turns to Follower
-							DPrintf("[%d-%d-%d]: update currentTerm from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, reply.Term)
 							rf.currentTerm = reply.Term
 							rf.votedFor = -1
 							rf.state = Follower
@@ -429,7 +428,7 @@ func (rf *Raft) requestVotes() {
 								}
 								rf.heartbeatTimer = time.NewTimer(rf.heartbeatInterval)
 								go rf.sendHeartbeats()
-								DPrintf("[%d-%d-%d]: new leader\n", rf.me, rf.state, rf.currentTerm)
+								DPrintf("[%d-%d-%d]: new Leader\n", rf.me, rf.state, rf.currentTerm)
 							}
 						}
 					}
