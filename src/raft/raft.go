@@ -267,11 +267,13 @@ type AppendEntriesReply struct {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	DPrintf("[%d-%d-%d]: receive heartbeat from %d\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
+	DPrintf("[%d-%d-%d]: receive logs from %d\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.Success = false
+		DPrintf("[%d-%d-%d]: reject AppendEntries from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
 	} else {
+		// Update to newest term
 		if args.Term > rf.currentTerm {
 			rf.currentTerm = args.Term
 		}
@@ -283,6 +285,30 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		} else {
 			rf.electionTimer.Reset(rf.electionTimeout)
 		}
+		reply.Term = rf.currentTerm
+
+		// AppendEntries success or not
+		if args.PrevLogIndex >= len(rf.log) || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+			reply.Success = false
+			DPrintf("[%d-%d-%d]: AppendEntries from %d fail\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
+		} else {
+			rf.log = rf.log[:args.PrevLogIndex+1]
+			rf.log = append(rf.log, args.Entries...)
+			if args.LeaderCommit > rf.commitIndex {
+				rf.commitIndex = min(args.LeaderCommit, len(rf.log)-1)
+				rf.commitCond.Broadcast()
+			}
+			reply.Success = true
+			DPrintf("[%d-%d-%d]: AppendEntries from %d success\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
+		}
+	}
+}
+
+func min(a int, b int) int {
+	if a < b {
+		return a
+	} else {
+		return b
 	}
 }
 
@@ -517,7 +543,7 @@ func (rf *Raft) sendLogs() {
 					rf.mu.Lock()
 					defer rf.mu.Unlock()
 					if len(rf.log) > rf.nextIndex[i] {
-						DPrintf("[%d-%d-%d]: send logs to %d\n", rf.me, rf.state, rf.currentTerm, i)
+						DPrintf("[%d-%d-%d]: send logs to %d, from %d to %d\n", rf.me, rf.state, rf.currentTerm, i, rf.nextIndex[i], len(rf.log)-1)
 						args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, LeaderCommit: rf.commitIndex}
 						args.Entries = make([]LogEntry, len(rf.log)-rf.nextIndex[i])
 						copy(args.Entries, rf.log[rf.nextIndex[i]:])
