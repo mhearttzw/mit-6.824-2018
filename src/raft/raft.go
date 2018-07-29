@@ -87,8 +87,10 @@ type Raft struct {
 	state             int           // Leader, Follower or Candidate
 	electionTimeout   time.Duration // 500~1000 ms
 	electionTimer     *time.Timer
-	heartbeatInterval time.Duration // 200 ms
+	heartbeatInterval time.Duration // interval between sending two heartbeats, 200 ms
 	heartbeatTimer    *time.Timer
+	logInterval       time.Duration // interval between applying two (groups of) log entries, 50 ms
+	logTimer          *time.Timer
 	applyCh           chan ApplyMsg
 	commitCond        *sync.Cond // for commitIndex update
 }
@@ -371,6 +373,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimer = time.NewTimer(rf.electionTimeout)
 	rf.heartbeatInterval = time.Millisecond * 200
 	rf.heartbeatTimer = time.NewTimer(rf.heartbeatInterval)
+	rf.logInterval = time.Millisecond * 50
+	rf.logTimer = time.NewTimer(rf.logInterval)
 	rf.applyCh = applyCh
 	rf.commitCond = sync.NewCond(&rf.mu)
 	// initialize from state persisted before a crash
@@ -446,7 +450,9 @@ func (rf *Raft) requestVotes() {
 									}
 								}
 								rf.heartbeatTimer = time.NewTimer(rf.heartbeatInterval)
+								rf.logTimer = time.NewTimer(rf.logInterval)
 								go rf.sendHeartbeats()
+								go rf.sendLogs()
 								DPrintf("[%d-%d-%d]: new Leader\n", rf.me, rf.state, rf.currentTerm)
 							}
 						}
@@ -471,12 +477,13 @@ func (rf *Raft) sendHeartbeats() {
 		for i := 0; i < len(rf.peers); i++ {
 			if i != rf.me {
 				go func(i int) {
+					rf.mu.Lock()
+					defer rf.mu.Unlock()
 					DPrintf("[%d-%d-%d]: send heartbeat to %d\n", rf.me, rf.state, rf.currentTerm, i)
 					args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, Entries: nil, LeaderCommit: rf.commitIndex}
 					var reply AppendEntriesReply
 					if rf.sendAppendEntries(i, &args, &reply) {
 						// Handle AppendEntries RPC reply
-						rf.mu.Lock()
 						DPrintf("[%d-%d-%d]: handle heartbeat reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
 						if rf.state == Leader && reply.Term > rf.currentTerm {
 							rf.state = Follower
@@ -484,13 +491,52 @@ func (rf *Raft) sendHeartbeats() {
 							rf.electionTimer = time.NewTimer(rf.electionTimeout)
 							go rf.launchElections()
 						}
-						rf.mu.Unlock()
 					}
 				}(i)
 			}
 		}
 		rf.heartbeatTimer.Reset(rf.heartbeatInterval)
 		<-rf.heartbeatTimer.C
+	}
+}
+
+//
+// send new logs to all other servers
+//
+func (rf *Raft) sendLogs() {
+	for {
+		if _, isLeader := rf.GetState(); !isLeader {
+			// Only Leader can send heartbeats
+			rf.logTimer.Stop()
+			return
+		}
+		for i := 0; i < len(rf.peers); i++ {
+			if i != rf.me {
+				go func(i int) {
+					rf.mu.Lock()
+					defer rf.mu.Unlock()
+					if len(rf.log) > rf.nextIndex[i] {
+						DPrintf("[%d-%d-%d]: send logs to %d\n", rf.me, rf.state, rf.currentTerm, i)
+						args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, Entries: make([]LogEntry, len(rf.log)-rf.nextIndex[i]), LeaderCommit: rf.commitIndex}
+						copy(args.Entries, rf.log[rf.nextIndex[i]:])
+						var reply AppendEntriesReply
+						if rf.sendAppendEntries(i, &args, &reply) {
+							// Handle AppendEntries RPC reply
+							DPrintf("[%d-%d-%d]: handle AppendEntries reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
+							if rf.state == Leader && reply.Term > rf.currentTerm {
+								rf.state = Follower
+								rf.votedFor = -1
+								rf.electionTimer = time.NewTimer(rf.electionTimeout)
+								go rf.launchElections()
+							}
+							
+						}
+					}
+				}(i)
+			}
+		}
+		rf.heartbeatTimer.Reset(rf.logInterval)
+		<-rf.logTimer.C
 	}
 }
 
