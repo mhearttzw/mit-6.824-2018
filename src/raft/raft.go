@@ -309,6 +309,19 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	isLeader := true
 
 	// Your code here (2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if rf.state == Leader {
+		logEntry := LogEntry{rf.currentTerm, command}
+		rf.log = append(rf.log, logEntry)
+		index = len(rf.log) - 1
+		term = rf.currentTerm
+		rf.nextIndex[rf.me] = index + 1
+		rf.matchIndex[rf.me] = index
+		DPrintf("[%d-%d-%d]: add new log entry\n", rf.me, rf.state, rf.currentTerm)
+	} else {
+		isLeader = false
+	}
 
 	return index, term, isLeader
 }
