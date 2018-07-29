@@ -286,7 +286,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 // send a AppendEntries RPC to a server.
 //
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
-	DPrintf("[%d-%d-%d]: sending heartbeat to %d\n", rf.me, rf.state, rf.currentTerm, server)
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
@@ -320,7 +319,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		term = rf.currentTerm
 		rf.nextIndex[rf.me] = index + 1
 		rf.matchIndex[rf.me] = index
-		DPrintf("[%d-%d-%d]: add new log entry\n", rf.me, rf.state, rf.currentTerm)
+		DPrintf("[%d-%d-%d]: add new log entry at index %d\n", rf.me, rf.state, rf.currentTerm, index)
 	} else {
 		isLeader = false
 	}
