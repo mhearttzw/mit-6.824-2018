@@ -182,7 +182,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term < rf.currentTerm {
 		reply.VoteGranted = false
 		DPrintf("[%d-%d-%d]: reject RequestVote from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
-		return
 	} else {
 		if args.Term > rf.currentTerm {
 			rf.currentTerm = args.Term
@@ -272,18 +271,18 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.Success = false
-		return
-	}
-	if args.Term > rf.currentTerm {
-		rf.currentTerm = args.Term
-	}
-	if rf.state == Leader {
-		rf.state = Follower
-		rf.votedFor = -1
-		rf.electionTimer = time.NewTimer(rf.electionTimeout)
-		go rf.launchElections()
 	} else {
-		rf.electionTimer.Reset(rf.electionTimeout)
+		if args.Term > rf.currentTerm {
+			rf.currentTerm = args.Term
+		}
+		if rf.state == Leader {
+			rf.state = Follower
+			rf.votedFor = -1
+			rf.electionTimer = time.NewTimer(rf.electionTimeout)
+			go rf.launchElections()
+		} else {
+			rf.electionTimer.Reset(rf.electionTimeout)
+		}
 	}
 }
 
