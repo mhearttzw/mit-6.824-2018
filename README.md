@@ -17,7 +17,7 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
 
     - [x] Part 2A
     
-    - [ ] Part 2B
+    - [x] Part 2B
     
     - [ ] Part 2C
 
