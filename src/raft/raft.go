@@ -184,6 +184,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		DPrintf("[%d-%d-%d]: reject RequestVote from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 	} else {
 		if args.Term > rf.currentTerm {
+			DPrintf("[%d-%d-%d]: term update from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, args.Term)
 			rf.currentTerm = args.Term
 			rf.votedFor = -1
 			rf.state = Follower
@@ -268,7 +269,7 @@ type AppendEntriesReply struct {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	DPrintf("[%d-%d-%d]: receive logs from %d\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
+	DPrintf("[%d-%d-%d]: receive heartbeat / log from %d\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.Success = false
@@ -276,6 +277,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	} else {
 		// Update to newest term
 		if args.Term > rf.currentTerm {
+			DPrintf("[%d-%d-%d]: term update from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, args.Term)
 			rf.currentTerm = args.Term
 		}
 		if rf.state == Leader {
@@ -455,8 +457,9 @@ func (rf *Raft) requestVotes() {
 					// Handle RequestVote RPC reply
 					rf.mu.Lock()
 					if rf.state == Candidate {
-						if reply.Term > args.Term {
+						if reply.Term > rf.currentTerm {
 							// Candidate has stale term, turns to Follower
+							DPrintf("[%d-%d-%d]: term update from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, reply.Term)
 							rf.currentTerm = reply.Term
 							rf.votedFor = -1
 							rf.state = Follower
