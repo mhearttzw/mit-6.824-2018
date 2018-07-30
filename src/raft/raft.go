@@ -184,7 +184,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		DPrintf("[%d-%d-%d]: reject RequestVote from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 	} else {
 		if args.Term > rf.currentTerm {
-			DPrintf("[%d-%d-%d]: term update from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, args.Term)
 			rf.currentTerm = args.Term
 			rf.votedFor = -1
 			rf.state = Follower
@@ -277,7 +276,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	} else {
 		// Update to newest term
 		if args.Term > rf.currentTerm {
-			DPrintf("[%d-%d-%d]: term update from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, args.Term)
 			rf.currentTerm = args.Term
 		}
 		if rf.state == Leader {
@@ -459,7 +457,6 @@ func (rf *Raft) requestVotes() {
 					if rf.state == Candidate {
 						if reply.Term > rf.currentTerm {
 							// Candidate has stale term, turns to Follower
-							DPrintf("[%d-%d-%d]: term update from %d to %d\n", rf.me, rf.state, rf.currentTerm, rf.currentTerm, reply.Term)
 							rf.currentTerm = reply.Term
 							rf.votedFor = -1
 							rf.state = Follower
