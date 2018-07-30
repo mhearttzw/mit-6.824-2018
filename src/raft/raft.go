@@ -511,18 +511,22 @@ func (rf *Raft) sendHeartbeats() {
 					defer rf.mu.Unlock()
 					DPrintf("[%d-%d-%d]: send heartbeat to %d\n", rf.me, rf.state, rf.currentTerm, i)
 					args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, Entries: nil, LeaderCommit: rf.commitIndex}
-					var reply AppendEntriesReply
-					if rf.sendAppendEntries(i, &args, &reply) {
-						// Handle AppendEntries RPC reply
-						DPrintf("[%d-%d-%d]: handle heartbeat reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
-						if rf.state == Leader && reply.Term > rf.currentTerm {
-							DPrintf("[%d-%d-%d]: turn to Follower after sending heartbeat to %d\n", rf.me, rf.state, rf.currentTerm, i)
-							rf.state = Follower
-							rf.votedFor = -1
-							rf.electionTimer = time.NewTimer(rf.electionTimeout)
-							go rf.launchElections()
+					go func() {
+						var reply AppendEntriesReply
+						if rf.sendAppendEntries(i, &args, &reply) {
+							// Handle AppendEntries RPC reply
+							rf.mu.Lock()
+							DPrintf("[%d-%d-%d]: handle heartbeat reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
+							if rf.state == Leader && reply.Term > rf.currentTerm {
+								DPrintf("[%d-%d-%d]: turn to Follower after sending heartbeat to %d\n", rf.me, rf.state, rf.currentTerm, i)
+								rf.state = Follower
+								rf.votedFor = -1
+								rf.electionTimer = time.NewTimer(rf.electionTimeout)
+								go rf.launchElections()
+							}
+							rf.mu.Unlock()
 						}
-					}
+					}()
 				}(i)
 			}
 		}
@@ -551,26 +555,30 @@ func (rf *Raft) sendLogs() {
 						args := AppendEntriesArgs{Term: rf.currentTerm, LeaderId: rf.me, PrevLogIndex: rf.nextIndex[i] - 1, PrevLogTerm: rf.log[rf.nextIndex[i]-1].Term, LeaderCommit: rf.commitIndex}
 						args.Entries = make([]LogEntry, len(rf.log)-rf.nextIndex[i])
 						copy(args.Entries, rf.log[rf.nextIndex[i]:])
-						var reply AppendEntriesReply
-						if rf.sendAppendEntries(i, &args, &reply) {
-							// Handle AppendEntries RPC reply
-							DPrintf("[%d-%d-%d]: handle AppendEntries reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
-							if reply.Success {
-								DPrintf("[%d-%d-%d]: AppendEntries in %d success\n", rf.me, rf.state, rf.currentTerm, i)
-								rf.matchIndex[i] = len(rf.log) - 1
-								rf.nextIndex[i] = rf.matchIndex[i] + 1
-								rf.updateCommitIndex()
-							} else if rf.state == Leader && reply.Term > rf.currentTerm {
-								DPrintf("[%d-%d-%d]: turn to Follower after AppendEntries in %d\n", rf.me, rf.state, rf.currentTerm, i)
-								rf.state = Follower
-								rf.votedFor = -1
-								rf.electionTimer = time.NewTimer(rf.electionTimeout)
-								go rf.launchElections()
-							} else {
-								DPrintf("[%d-%d-%d]: decrement nextIndex after AppendEntries in %d\n", rf.me, rf.state, rf.currentTerm, i)
-								rf.nextIndex[i]--
+						go func() {
+							var reply AppendEntriesReply
+							if rf.sendAppendEntries(i, &args, &reply) {
+								// Handle AppendEntries RPC reply
+								rf.mu.Lock()
+								DPrintf("[%d-%d-%d]: handle AppendEntries reply from %d\n", rf.me, rf.state, rf.currentTerm, i)
+								if reply.Success {
+									DPrintf("[%d-%d-%d]: AppendEntries in %d success\n", rf.me, rf.state, rf.currentTerm, i)
+									rf.matchIndex[i] = len(rf.log) - 1
+									rf.nextIndex[i] = rf.matchIndex[i] + 1
+									rf.updateCommitIndex()
+								} else if rf.state == Leader && reply.Term > rf.currentTerm {
+									DPrintf("[%d-%d-%d]: turn to Follower after AppendEntries in %d\n", rf.me, rf.state, rf.currentTerm, i)
+									rf.state = Follower
+									rf.votedFor = -1
+									rf.electionTimer = time.NewTimer(rf.electionTimeout)
+									go rf.launchElections()
+								} else {
+									DPrintf("[%d-%d-%d]: decrement nextIndex after AppendEntries in %d\n", rf.me, rf.state, rf.currentTerm, i)
+									rf.nextIndex[i]--
+								}
+								rf.mu.Unlock()
 							}
-						}
+						}()
 					}
 				}(i)
 			}
