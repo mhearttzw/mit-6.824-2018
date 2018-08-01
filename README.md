@@ -13,13 +13,13 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
     
     - [x] Part V: Inverted index generation
 
-- [ ] Lab 2: Raft
+- [x] Lab 2: Raft
 
     - [x] Part 2A
     
     - [x] Part 2B
     
-    - [ ] Part 2C
+    - [x] Part 2C
 
 - [ ] Lab 3: Fault-tolerant Key/Value Service
 
