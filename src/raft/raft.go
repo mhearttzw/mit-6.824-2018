@@ -198,6 +198,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		if rf.votedFor == -1 {
 			lastLogIndex := len(rf.log) - 1
 			lastLogTerm := rf.log[lastLogIndex].Term
+			DPrintf("[%d-%d-%d]: args.LastLogTerm: %d, lastLogTerm: %d, args.LastLogIndex: %d, lastLogIndex: %d\n", rf.me, rf.state, rf.currentTerm, args.LastLogTerm, lastLogTerm, args.LastLogIndex, lastLogIndex)
 			if args.LastLogTerm > lastLogTerm || (args.LastLogTerm == lastLogTerm && args.LastLogIndex >= lastLogIndex) {
 				rf.votedFor = args.CandidateId
 				rf.state = Follower
@@ -356,6 +357,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		term = rf.currentTerm
 		rf.nextIndex[rf.me] = index + 1
 		rf.matchIndex[rf.me] = index
+		rf.persist()
 		DPrintf("[%d-%d-%d]: add new log entry at index %d\n", rf.me, rf.state, rf.currentTerm, index)
 	} else {
 		isLeader = false
@@ -412,6 +414,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.commitCond = sync.NewCond(&rf.mu)
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+	DPrintf("[%d-%d-%d]: initialize from state persisted before a crash, rf.state: %d, len(rf.log): %d\n", rf.me, rf.state, rf.currentTerm, rf.state, len(rf.log))
 
 	go rf.launchElections()
 	go rf.sendApplyMsgs()
