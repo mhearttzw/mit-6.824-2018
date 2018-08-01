@@ -23,6 +23,8 @@ import (
 	"time"
 	"math/rand"
 	"sort"
+	"bytes"
+	"labgob"
 )
 
 // import "bytes"
@@ -117,13 +119,13 @@ func (rf *Raft) GetState() (int, bool) {
 //
 func (rf *Raft) persist() {
 	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.log)
+	data := w.Bytes()
+	rf.persister.SaveRaftState(data)
 }
 
 //
@@ -134,18 +136,20 @@ func (rf *Raft) readPersist(data []byte) {
 		return
 	}
 	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var log []LogEntry
+	if d.Decode(&currentTerm) != nil ||
+		d.Decode(&votedFor) != nil ||
+		d.Decode(&log) != nil {
+		DPrintf("[%d-%d-%d]: Decode persisted state fail\n", rf.me, rf.state, rf.currentTerm)
+	} else {
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.log = log
+	}
 }
 
 //
@@ -206,6 +210,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 			}
 		}
 	}
+	rf.persist()
 }
 
 //
@@ -303,6 +308,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			DPrintf("[%d-%d-%d]: AppendEntries from %d success\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
 		}
 	}
+	rf.persist()
 }
 
 func min(a int, b int) int {
@@ -461,6 +467,7 @@ func (rf *Raft) requestVotes() {
 							rf.votedFor = -1
 							rf.state = Follower
 							rf.electionTimer.Reset(rf.electionTimeout)
+							rf.persist()
 							DPrintf("[%d-%d-%d]: from Candidate to Follower\n", rf.me, rf.state, rf.currentTerm)
 						} else if reply.VoteGranted {
 							numVotes++
@@ -519,6 +526,7 @@ func (rf *Raft) sendHeartbeats() {
 								rf.state = Follower
 								rf.votedFor = -1
 								rf.electionTimer = time.NewTimer(rf.electionTimeout)
+								rf.persist()
 								go rf.launchElections()
 							}
 							rf.mu.Unlock()
