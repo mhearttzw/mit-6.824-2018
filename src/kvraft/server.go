@@ -17,11 +17,20 @@ func DPrintf(format string, a ...interface{}) (n int, err error) {
 	return
 }
 
-
 type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+	Op       string // "Get", "Put", "Append"
+	Key      string
+	Value    string
+	ClientID int64
+	SeqNo    int
+}
+
+type LastReply struct {
+	SeqNo int
+	Reply GetReply
 }
 
 type KVServer struct {
@@ -33,11 +42,55 @@ type KVServer struct {
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
+	kvs             map[string]string
+	notifyChs       map[int]chan struct{}
+	lastClientReply map[int64]*LastReply
 }
-
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
+	if _, leader := kv.rf.GetState(); !leader {
+		DPrintf("Non-Leader %d receives Get %s", kv.me, args.Key)
+		reply.WrongLeader = true
+		reply.Err = ""
+		reply.Value = ""
+		return
+	}
+
+	kv.mu.Lock()
+	if lastReply, ok := kv.lastClientReply[args.ClientID]; ok {
+		if args.SeqNo <= lastReply.SeqNo {
+			kv.mu.Unlock()
+			reply.WrongLeader = false
+			reply.Err = ""
+			reply.Value = lastReply.Reply.Value
+			return
+		}
+	}
+
+	command := Op{Op: "Get", Key: args.Key, ClientID: args.ClientID, SeqNo: args.SeqNo}
+	index, term, _ := kv.rf.Start(command)
+
+	ch := make(chan struct{})
+	kv.notifyChs[index] = ch
+
+	<-ch
+	currentTerm, isLeader := kv.rf.GetState()
+	// what if still leader, but different term? let client retry
+	if !isLeader || term != currentTerm {
+		reply.WrongLeader = true
+		reply.Err = ""
+		reply.Value = ""
+		return
+	}
+
+	kv.mu.Lock()
+	if value, ok := kv.kvs[args.Key]; ok {
+		reply.Value = value
+	} else {
+		reply.Err = ErrNoKey
+	}
+	kv.mu.Unlock()
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
@@ -84,6 +137,9 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 
 	// You may need initialization code here.
+	kv.kvs = make(map[string]string)
+	kv.notifyChs = make(map[int]chan struct{})
+	kv.lastClientReply = make(map[int64]*LastReply)
 
 	return kv
 }
