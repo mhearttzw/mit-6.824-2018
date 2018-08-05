@@ -2,12 +2,19 @@ package raftkv
 
 import "labrpc"
 import "crypto/rand"
-import "math/big"
+import (
+	"math/big"
+	"time"
+)
 
+var clients = make(map[int64]bool)
 
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
+	leader   int
+	clientID int64
+	seqNo    int
 }
 
 func nrand() int64 {
@@ -21,6 +28,16 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
+	ck.leader = 0
+	ck.seqNo = 1
+	for {
+		ck.clientID = nrand()
+		if !clients[ck.clientID] {
+			clients[ck.clientID] = true
+			break
+		}
+	}
+	DPrintf("Make clerk %d\n", ck.clientID)
 	return ck
 }
 
@@ -37,9 +54,34 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 //
 func (ck *Clerk) Get(key string) string {
-
 	// You will have to modify this function.
-	return ""
+	DPrintf("Clerk get key %s\n", key)
+	for {
+		args := &GetArgs{key, ck.clientID, ck.seqNo}
+		reply := new(GetReply)
+		ck.leader %= len(ck.servers)
+		done := make(chan bool, 1)
+
+		go func() {
+			ok := ck.servers[ck.leader].Call("RaftKV.Get", args, reply)
+			done <- ok
+		}()
+
+		select {
+		case <-time.After(200 * time.Millisecond): // rpc timeout: 200ms
+			ck.leader++
+			continue
+		case ok := <-done:
+			if ok && !reply.WrongLeader {
+				ck.seqNo++
+				if reply.Err == OK {
+					return reply.Value
+				}
+				return ""
+			}
+			ck.leader++
+		}
+	}
 }
 
 //
