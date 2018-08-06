@@ -50,7 +50,7 @@ type KVServer struct {
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
 	if _, leader := kv.rf.GetState(); !leader {
-		DPrintf("Non-Leader %d receives Get %s", kv.me, args.Key)
+		DPrintf("Non-Leader %d receives Get %s\n", kv.me, args.Key)
 		reply.WrongLeader = true
 		reply.Err = ""
 		reply.Value = ""
@@ -58,6 +58,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	}
 
 	kv.mu.Lock()
+	DPrintf("Leader %d receives Get %s\n", kv.me, args.Key)
 	if lastReply, ok := kv.lastClientReply[args.ClientID]; ok {
 		if args.SeqNo <= lastReply.SeqNo {
 			kv.mu.Unlock()
@@ -140,6 +141,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.kvs = make(map[string]string)
 	kv.notifyChs = make(map[int]chan struct{})
 	kv.lastClientReply = make(map[int64]*LastReply)
+
+	DPrintf("Server %d started\n", kv.me)
 
 	return kv
 }
