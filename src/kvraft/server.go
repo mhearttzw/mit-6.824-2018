@@ -23,7 +23,7 @@ type Op struct {
 	// otherwise RPC will break.
 	Key      string
 	Value    string
-	Op       string // "Get", "Put", "Append"
+	Op       string // "Get", "Put" or "Append"
 	ClientID int64
 	SeqNo    int
 }
@@ -140,6 +140,13 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 }
 
 //
+// receive ApplyMsg from Raft and apply commands
+//
+func (kv *KVServer) ApplyCommands() {
+
+}
+
+//
 // the tester calls Kill() when a KVServer instance won't
 // be needed again. you are not required to do anything
 // in Kill(), but it might be convenient to (for example)
@@ -182,6 +189,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.kvs = make(map[string]string)
 	kv.notifyChs = make(map[int]chan struct{})
 	kv.lastClientReply = make(map[int64]*LastReply)
+
+	go kv.ApplyCommands()
 
 	DPrintf("Server %d started\n", kv.me)
 
