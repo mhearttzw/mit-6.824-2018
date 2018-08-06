@@ -23,7 +23,7 @@ My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
 
 - [ ] Lab 3: Fault-tolerant Key/Value Service
 
-    - [ ] Part A: Key/value service without log compaction
+    - [x] Part A: Key/value service without log compaction
     
     - [ ] Part B: Key/value service with log compaction
     
