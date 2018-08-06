@@ -101,7 +101,6 @@ type Raft struct {
 // return currentTerm and whether this server
 // believes it is the leader.
 func (rf *Raft) GetState() (int, bool) {
-
 	var term int
 	var isleader bool
 	// Your code here (2A).
@@ -183,10 +182,12 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	defer rf.mu.Unlock()
 	DPrintf("[%d-%d-%d]: receive RequestVote from %d\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 	if args.Term < rf.currentTerm {
+		// Reject if sender's term is stale
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		DPrintf("[%d-%d-%d]: reject RequestVote from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.CandidateId)
 	} else {
+		// Update to lastest term
 		if args.Term > rf.currentTerm {
 			rf.currentTerm = args.Term
 			rf.votedFor = -1
@@ -195,6 +196,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		}
 		reply.Term = rf.currentTerm
 
+		// If haven't voted, vote for sender
 		if rf.votedFor == -1 {
 			lastLogIndex := len(rf.log) - 1
 			lastLogTerm := rf.log[lastLogIndex].Term
@@ -276,11 +278,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	defer rf.mu.Unlock()
 	DPrintf("[%d-%d-%d]: receive heartbeat / log from %d\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
 	if args.Term < rf.currentTerm {
+		// Reject if sender's term is stale
 		reply.Term = rf.currentTerm
 		reply.Success = false
 		DPrintf("[%d-%d-%d]: reject AppendEntries from %d because of stale term\n", rf.me, rf.state, rf.currentTerm, args.LeaderId)
 	} else {
-		// Update to newest term
+		// Update to lastest term
 		if args.Term > rf.currentTerm {
 			rf.currentTerm = args.Term
 		}
@@ -321,7 +324,7 @@ func min(a int, b int) int {
 }
 
 //
-// send a AppendEntries RPC to a server.
+// send an AppendEntries RPC to a server.
 //
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
