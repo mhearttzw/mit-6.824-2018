@@ -1,4 +1,4 @@
-# MIT-6.824-2018
+# mit-6.824-2018
 My implementation of MIT 6.824 Distributed System Labs (Spring 2018)
 
 - [x] Lab 1: MapReduce
