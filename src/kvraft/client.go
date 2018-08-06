@@ -63,7 +63,7 @@ func (ck *Clerk) Get(key string) string {
 		done := make(chan bool, 1)
 
 		go func() {
-			ok := ck.servers[ck.leader].Call("RaftKV.Get", args, reply)
+			ok := ck.servers[ck.leader].Call("KVServer.Get", args, reply)
 			done <- ok
 		}()
 
@@ -110,7 +110,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		done := make(chan bool, 1)
 
 		go func() {
-			ok := ck.servers[ck.leader].Call("RaftKV.PutAppend", args, reply)
+			ok := ck.servers[ck.leader].Call("KVServer.PutAppend", args, reply)
 			done <- ok
 		}()
 
