@@ -21,9 +21,9 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
-	Op       string // "Get", "Put", "Append"
 	Key      string
 	Value    string
+	Op       string // "Get", "Put", "Append"
 	ClientID int64
 	SeqNo    int
 }
@@ -63,21 +63,22 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 		if args.SeqNo <= lastReply.SeqNo {
 			kv.mu.Unlock()
 			reply.WrongLeader = false
-			reply.Err = ""
+			reply.Err = OK
 			reply.Value = lastReply.Reply.Value
 			return
 		}
 	}
 
-	command := Op{Op: "Get", Key: args.Key, ClientID: args.ClientID, SeqNo: args.SeqNo}
+	command := Op{Key: args.Key, Op: "Get", ClientID: args.ClientID, SeqNo: args.SeqNo}
 	index, term, _ := kv.rf.Start(command)
 
 	ch := make(chan struct{})
 	kv.notifyChs[index] = ch
 
+	kv.mu.Unlock()
+
 	<-ch
 	currentTerm, isLeader := kv.rf.GetState()
-	// what if still leader, but different term? let client retry
 	if !isLeader || term != currentTerm {
 		reply.WrongLeader = true
 		reply.Err = ""
@@ -87,15 +88,55 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 
 	kv.mu.Lock()
 	if value, ok := kv.kvs[args.Key]; ok {
+		reply.WrongLeader = false
+		reply.Err = OK
 		reply.Value = value
 	} else {
+		reply.WrongLeader = false
 		reply.Err = ErrNoKey
+		reply.Value = ""
 	}
 	kv.mu.Unlock()
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 	// Your code here.
+	if _, leader := kv.rf.GetState(); !leader {
+		DPrintf("Non-Leader %d receives PutAppend %s\n", kv.me, args.Key)
+		reply.WrongLeader = true
+		reply.Err = ""
+		return
+	}
+
+	kv.mu.Lock()
+	DPrintf("Leader %d receives PutAppend %s\n", kv.me, args.Key)
+	if lastReply, ok := kv.lastClientReply[args.ClientID]; ok {
+		if args.SeqNo <= lastReply.SeqNo {
+			kv.mu.Unlock()
+			reply.WrongLeader = false
+			reply.Err = OK
+			return
+		}
+	}
+
+	command := Op{Key: args.Key, Value: args.Value, Op: args.Op, ClientID: args.ClientID, SeqNo: args.SeqNo}
+	index, term, _ := kv.rf.Start(command)
+
+	ch := make(chan struct{})
+	kv.notifyChs[index] = ch
+
+	kv.mu.Unlock()
+
+	<-ch
+	currentTerm, isLeader := kv.rf.GetState()
+	if !isLeader || term != currentTerm {
+		reply.WrongLeader = true
+		reply.Err = ""
+		return
+	}
+
+	reply.WrongLeader = false
+	reply.Err = OK
 }
 
 //
