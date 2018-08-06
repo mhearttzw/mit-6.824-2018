@@ -30,7 +30,7 @@ type Op struct {
 
 type LastReply struct {
 	SeqNo int
-	Reply GetReply
+	Value string
 }
 
 type KVServer struct {
@@ -64,7 +64,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 			kv.mu.Unlock()
 			reply.WrongLeader = false
 			reply.Err = OK
-			reply.Value = lastReply.Reply.Value
+			reply.Value = lastReply.Value
 			return
 		}
 	}
@@ -143,7 +143,31 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) {
 // receive ApplyMsg from Raft and apply commands
 //
 func (kv *KVServer) ApplyCommands() {
+	for {
+		applyMsg, ok := <-kv.applyCh
+		if ok && applyMsg.Command != nil {
+			kv.mu.Lock()
+			command := applyMsg.Command.(Op)
+			if lastReply, ok := kv.lastClientReply[command.ClientID]; !ok || lastReply.SeqNo < command.SeqNo {
+				switch command.Op {
+				case "Get":
+					kv.lastClientReply[command.ClientID] = &LastReply{SeqNo: command.SeqNo, Value: kv.kvs[command.Key]}
+				case "Put":
+					kv.kvs[command.Key] = command.Value
+					kv.lastClientReply[command.ClientID] = &LastReply{SeqNo: command.SeqNo}
+				case "Append":
+					kv.kvs[command.Key] += command.Value
+					kv.lastClientReply[command.ClientID] = &LastReply{SeqNo: command.SeqNo}
+				}
+			}
 
+			if notifyCh, ok := kv.notifyChs[applyMsg.CommandIndex]; ok && notifyCh != nil {
+				close(notifyCh)
+				delete(kv.notifyChs, applyMsg.CommandIndex)
+			}
+			kv.mu.Unlock()
+		}
+	}
 }
 
 //
