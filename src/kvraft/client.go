@@ -55,7 +55,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 //
 func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
-	DPrintf("Clerk get key %s\n", key)
+	DPrintf("Clerk gets key %s\n", key)
 	for {
 		args := &GetArgs{key, ck.clientID, ck.seqNo}
 		reply := new(GetReply)
@@ -96,6 +96,36 @@ func (ck *Clerk) Get(key string) string {
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// You will have to modify this function.
+	if op == "Put" {
+		DPrintf("Clerk puts key %s value %s\n", key, value)
+	} else {
+		DPrintf("Clerk appends key %s value %s\n", key, value)
+	}
+
+	for {
+		args := &PutAppendArgs{Key: key, Value: value, Op: op, ClientID: ck.clientID, SeqNo: ck.seqNo}
+		reply := new(PutAppendReply)
+
+		ck.leader %= len(ck.servers)
+		done := make(chan bool, 1)
+
+		go func() {
+			ok := ck.servers[ck.leader].Call("RaftKV.PutAppend", args, reply)
+			done <- ok
+		}()
+
+		select {
+		case <-time.After(200 * time.Millisecond): // rpc timeout: 200ms
+			ck.leader++
+			continue
+		case ok := <-done:
+			if ok && !reply.WrongLeader && reply.Err == OK {
+				ck.seqNo++
+				return
+			}
+			ck.leader++
+		}
+	}
 }
 
 func (ck *Clerk) Put(key string, value string) {
